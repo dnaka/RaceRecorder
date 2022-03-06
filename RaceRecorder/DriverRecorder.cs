@@ -357,11 +357,11 @@ namespace RaceRecorder
         // ゼッケン番号テキストボックスでEnterを推したらラップタイムの登録にかかる
         private void DriverNumberTextBox_KeyPress(object sender, KeyPressEventArgs e)
         {
-            if (e.KeyChar ==(char)Keys.Enter)
+            if (e.KeyChar == (char)Keys.Enter && this.state == State.RACING)
             {
                 regist(DriverNumberTextBox.Text);
-                DriverNumberTextBox.Text = "";
             }
+            DriverNumberTextBox.Text = "";
         }
 
         // 結果表示
@@ -405,12 +405,12 @@ namespace RaceRecorder
         // 30行のテーブル1個を作る
         private string makeOneTable(int startIndex)
         {
-            if (startIndex >= this.driverTable.Rows.Count)
+            if (startIndex > this.driverTable.Rows.Count - 1)
             {
                 return ""; 
             }
 
-            int endIndex = startIndex + 30;
+            int endIndex = startIndex + 29;
             if (endIndex > this.driverTable.Rows.Count - 1)
             {
                 endIndex = this.driverTable.Rows.Count - 1;
@@ -418,7 +418,7 @@ namespace RaceRecorder
 
             StringBuilder sb = new StringBuilder();
 
-            for (int i = startIndex; i < endIndex; i++)
+            for (int i = startIndex; i <= endIndex; i++)
             {
                 DataRow r = this.driverTable.Rows[i];
                 string recordPath = Path.GetTempPath() + r[0] + ".html";
@@ -519,27 +519,36 @@ namespace RaceRecorder
             string rider = "<h1>" + no + "：" + name + "</h1>\r\n";
 
             StringBuilder sb = new StringBuilder();
+            if (listNum > 0)
+            {
+                for (int page = 0; page < pageNum; page++)
+                {
+                    sb.Append(date);
+                    sb.Append(title);
+                    sb.Append(rider);
 
-            for (int page = 0; page < pageNum; page++)
+                    string table1 = makeOneRecordTable(no, page * tableNum * rowNum, rowNum);
+                    string table2 = makeOneRecordTable(no, page * tableNum * rowNum + rowNum, rowNum);
+                    string table3 = makeOneRecordTable(no, page * tableNum * rowNum + rowNum * 2, rowNum);
+
+                    string div =
+                            "<table width=\"100%\"><tr>" +
+                            "<td width=\"32%\">" + table1 + "</td>" +
+                            "<td width=\"2%\"></td>" +
+                            "<td width=\"32%\">" + table2 + "</td>" +
+                            "<td width=\"2%\"></td>" +
+                            "<td width=\"32%\">" + table3 + "</td>" +
+                            "</tr></table>\r\n";
+
+                    sb.Append(div);
+                    sb.Append("<div class=\"pagebreak\"></div>\r\n");
+                }
+            }
+            else
             {
                 sb.Append(date);
                 sb.Append(title);
                 sb.Append(rider);
-
-                string table1 = makeOneRecordTable(no, page * tableNum * rowNum, rowNum);
-                string table2 = makeOneRecordTable(no, page * tableNum * rowNum + rowNum, rowNum);
-                string table3 = makeOneRecordTable(no, page * tableNum * rowNum + rowNum * 2, rowNum);
-
-                string div =
-                        "<table width=\"100%\"><tr>" +
-                        "<td width=\"32%\">" + table1 + "</td>" +
-                        "<td width=\"2%\"></td>" +
-                        "<td width=\"32%\">" + table2 + "</td>" +
-                        "<td width=\"2%\"></td>" +
-                        "<td width=\"32%\">" + table3 + "</td>" +
-                        "</tr></table>\r\n";
-
-                sb.Append(div);
                 sb.Append("<div class=\"pagebreak\"></div>\r\n");
             }
 
@@ -550,8 +559,6 @@ namespace RaceRecorder
             File.WriteAllText(path, html);
         }
 
-
-
         private string makeOneRecordTable(string no, int startIndex, int rowNum)
         {
             List<string> record = this.records[no];
@@ -561,7 +568,7 @@ namespace RaceRecorder
                 return "";
             }
 
-            int endIndex = startIndex + rowNum;
+            int endIndex = startIndex + rowNum - 1;
             if (endIndex > record.Count - 1)
             {
                 endIndex = record.Count - 1;
@@ -569,7 +576,7 @@ namespace RaceRecorder
 
             StringBuilder sb = new StringBuilder();
 
-            for (int i = startIndex; i < endIndex; i++)
+            for (int i = startIndex; i <= endIndex; i++)
             {
                 int lap = i + 1;
                 sb.Append(
