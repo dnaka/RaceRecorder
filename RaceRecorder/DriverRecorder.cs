@@ -1,13 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Data;
-using System.Drawing;
-using System.Linq;
 using System.Text;
-using System.Threading.Tasks;
 using System.Windows.Forms;
 using System.IO;
+using System.Text.RegularExpressions;
 
 namespace RaceRecorder
 {
@@ -17,6 +14,8 @@ namespace RaceRecorder
         WAIT_START, // 登録完了してスタート待
         RACING      // レース中
     }
+
+
 
     public partial class RaceRecorder : Form
     {
@@ -211,6 +210,17 @@ namespace RaceRecorder
                     MessageBox.Show("ゼッケンか名前が未入力の選手がいます", "ドライバー登録エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
                     return false;
                 }
+
+                Regex re = new Regex("[０-９]+");
+                string no2 = re.Replace(noCell.ToString(), myReplacer);
+
+                int n;
+                if (!Int32.TryParse(no2, out n))
+                {
+                    MessageBox.Show("ゼッケンに数字以外が設定されています", "ドライバー登録エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return false;
+                }
+                this.driverTable.Rows[i][0] = no2;
                 i++;     
             }
 
@@ -273,7 +283,17 @@ namespace RaceRecorder
         private void registButton_Click(object sender, EventArgs e)
         {
             string no = DriverNumberTextBox.Text;
-            regist(no);
+            // 全角->半角変換
+            Regex re = new Regex("[０-９]+");
+            string no2 = re.Replace(no, myReplacer);
+
+            //整数の時だけ登録
+            int n;
+            if (Int32.TryParse(no2, out n))
+            {
+                regist(no2);
+            }
+
             DriverNumberTextBox.Text = "";
             DriverNumberTextBox.Focus();
         }
@@ -290,7 +310,7 @@ namespace RaceRecorder
 
                 for (int i = 0; i < this.driverTable.Rows.Count; i++)
                 {
-
+                    // 文字列として一致するゼッケンを探す
                     if (this.driverTable.Rows[i][0].ToString() == no)
                     {
                         this.driverTable.Columns[2].ReadOnly = false;
@@ -349,7 +369,7 @@ namespace RaceRecorder
         {
             string tmpFile =  makeResultHtml();
 
-            string url = "file://" + tmpFile.Replace("\\", "/");
+            string url = "file:///" + tmpFile.Replace("\\", "/");
             System.Diagnostics.Process.Start(url);
         }
 
@@ -381,48 +401,105 @@ namespace RaceRecorder
             File.WriteAllText(tmpFile2, recordBuffer.ToString());
         }
 
+
+        // 30行のテーブル1個を作る
+        private string makeOneTable(int startIndex)
+        {
+            if (startIndex >= this.driverTable.Rows.Count)
+            {
+                return ""; 
+            }
+
+            int endIndex = startIndex + 30;
+            if (endIndex > this.driverTable.Rows.Count - 1)
+            {
+                endIndex = this.driverTable.Rows.Count - 1;
+            }
+
+            StringBuilder sb = new StringBuilder();
+
+            for (int i = startIndex; i < endIndex; i++)
+            {
+                DataRow r = this.driverTable.Rows[i];
+                string recordPath = Path.GetTempPath() + r[0] + ".html";
+                int rank = i + 1;
+                sb.Append(
+                   "<tr><td align=\"center\">" + rank.ToString() +
+                   "</td><td align=\"center\">" + r[0].ToString() +
+                   "</td><td align=\"center\"><a href=\"" + recordPath + "\">" + r[1].ToString() +
+                   "</a></td><td align=\"center\">" + r[2].ToString() +
+                   "</td><td align=\"center\">" + r[3].ToString() + "</td></tr>\r\n"
+               );
+
+               makeRecordhtml(r[0].ToString(), r[1].ToString(), recordPath);
+            }
+
+            string table =
+                "<table border=\"1\" width=\"100%\">\r\n" +
+                "<tr><th>順<br>位</th><th>" +
+                //RaceRecorder.NO +
+                "ゼッ<br>ケン" +
+                "</th><th>" +
+                //RaceRecorder.NAME +
+                "氏名" +
+                "</th><th>" +
+                //RaceRecorder.LAP +
+                "Lap<br>数" +
+                "</th><th>" +
+                //RaceRecorder.LAPTIME +
+                "最終<br>LapTime" +
+                "</th></tr>\r\n" +
+                sb.ToString() +
+                "</table>\r\n";
+
+            return table;
+        }
+        
         // HTMLファイルを生成してtmpファイルを作る
         private string makeResultHtml()
         {
             string tmpPath = Path.GetTempPath() + "result.html";            
-            int rank = 1;
+
+            int listNum = this.driverTable.Rows.Count % 30 == 0 ? this.driverTable.Rows.Count / 30 : this.driverTable.Rows.Count / 30 + 1;
+            int pageNum = listNum % 2 == 0 ? listNum / 2: listNum / 2 + 1;
+
+            string date  = "<h3>" + DateTime.Now.ToLocalTime().ToShortDateString() + "</h3>\r\n";
+            string title = "<h1>" + this.RaceNameTextBox.Text + " 総合順位</h1>\r\n";
 
             StringBuilder sb = new StringBuilder();
-            foreach (DataRow r in this.driverTable.Rows)
+            for (int page = 0; page < pageNum; page++)
             {
-                string recordPath = Path.GetTempPath() + r[0] + ".html";
-                sb.Append(
-                    "<tr><td align=\"center\">" + rank.ToString() +
-                    "</td><td align=\"center\">" + r[0].ToString() +
-                    "</td><td align=\"center\"><a href=\"" + recordPath + "\">" + r[1].ToString() +
-                    "</a></td><td align=\"center\">" + r[2].ToString() +
-                    "</td><td align=\"center\">" + r[3].ToString() + "</td></tr>\r\n"
-                );
+                sb.Append(date);
+                sb.Append(title);
 
-                makeRecordhtml(r[0].ToString(), r[1].ToString(), recordPath);
+                if (listNum == 1)
+                {
+                    string table = makeOneTable(page * 2 * 30);
+                    string div =
+                        "<table width=\"100%\"><tr>" + 
+                        "<td width=\"48%\">" + table + "</td>" + 
+                        "<td width=\"2%\"></td>" +
+                        "<td width=\"48%\"></td></tr></table>";
+                    sb.Append(div);
+                }
+                else
+                {
+                    string table1 = makeOneTable(page * 2 * 30);
+                    string table2 = makeOneTable(page * 2 * 30 + 30);
 
-                rank++;
+                    string div =
+                        "<table width=\"100%\"><tr>" + 
+                        "<td width=\"48%\">" + table1 + "</td>" +
+                        "<td width=\"2%\"></td>" +
+                        "<td width=\"48%\">" + table2 + "</td></tr></table>\r\n";
+                    sb.Append(div);
+                }
+                sb.Append("<div class=\"pagebreak\"></div>\r\n");
             }
 
-            string table = 
-                "<table border=\"1\">\r\n" + 
-                "<tr><th>順位</th><th>" + 
-                RaceRecorder.NO +
-                "</th><th>" + 
-                RaceRecorder.NAME + 
-                "</th><th>" + 
-                RaceRecorder.LAP + 
-                "</th><th>" + 
-                RaceRecorder.LAPTIME + 
-                "</th></tr>\r\n" + 
-                sb.ToString() + 
-                "</table>\r\n";
-
-            string date = "<h3>" + DateTime.Now.ToLocalTime().ToShortDateString() + "</h3>\r\n";
-            string title = "<h1>" + this.RaceNameTextBox.Text + "</h1>\r\n";
-
-            string header = "<header><title>" + this.RaceNameTextBox.Text +"</title></header>";
-            string html = header + "<body>" + date + title + table + "</body>";
+            string style = ".pagebreak { break-after: page; }";
+            string header = "<header>\r\n<title>" + this.RaceNameTextBox.Text +"</title>\r\n<style>\r\n" + style + "</style>\r\n</header>\r\n";
+            string html = header + "<body>\r\n" + sb.ToString() + "\r\n</body>";
             File.WriteAllText(tmpPath, html);
 
             return tmpPath;
@@ -430,39 +507,110 @@ namespace RaceRecorder
 
         private void makeRecordhtml(string no, string name, string path)
         {
-            int lap = 1;
-            List<string> record = this.records[no];
-            StringBuilder sb = new StringBuilder();
-            foreach (string time in record)
-            {
-                sb.Append(
-                  "<tr><td align=\"center\">" + lap.ToString() + "</a></td><td>" + time + "</td></tr>\r\n"
-                );
-                lap++;
-            }
+            int tableNum = 3; // 1ページの表の個数
+            int rowNum = 30;  // 表1個当たりの行の数
 
-            string table =
-             "<table border=\"1\">\r\n" +
-             "<th>" +
-             RaceRecorder.LAP +
-             "</th><th>" +
-             RaceRecorder.LAPTIME +
-             "</th></tr>\r\n" +
-             sb.ToString() +
-             "</table>\r\n";
+            List<string> record = this.records[no];
+            int listNum = record.Count % rowNum == 0 ? record.Count / rowNum : record.Count / rowNum + 1;
+            int pageNum = listNum % tableNum == 0 ? listNum / tableNum : listNum / tableNum + 1;
 
             string date = "<h3>" + DateTime.Now.ToLocalTime().ToShortDateString() + "</h3>\r\n";
-            string title = "<h1>" + this.RaceNameTextBox.Text + "</h1>\r\n";
-            string rider = "<h2>" + name +"</h2>\r\n";
+            string title = "<h2>" + this.RaceNameTextBox.Text + " 個人成績</h2>\r\n";
+            string rider = "<h1>" + no + "：" + name + "</h1>\r\n";
 
-            string header = "<header><title>" + this.RaceNameTextBox.Text + "</title></header>";
-            string html = header + "<body>" + date + title + rider + table + "</body>";
+            StringBuilder sb = new StringBuilder();
+
+            for (int page = 0; page < pageNum; page++)
+            {
+                sb.Append(date);
+                sb.Append(title);
+                sb.Append(rider);
+
+                string table1 = makeOneRecordTable(no, page * tableNum * rowNum, rowNum);
+                string table2 = makeOneRecordTable(no, page * tableNum * rowNum + rowNum, rowNum);
+                string table3 = makeOneRecordTable(no, page * tableNum * rowNum + rowNum * 2, rowNum);
+
+                string div =
+                        "<table width=\"100%\"><tr>" +
+                        "<td width=\"32%\">" + table1 + "</td>" +
+                        "<td width=\"2%\"></td>" +
+                        "<td width=\"32%\">" + table2 + "</td>" +
+                        "<td width=\"2%\"></td>" +
+                        "<td width=\"32%\">" + table3 + "</td>" +
+                        "</tr></table>\r\n";
+
+                sb.Append(div);
+                sb.Append("<div class=\"pagebreak\"></div>\r\n");
+            }
+
+            string style = ".pagebreak { break-after: page; }";
+            string header = "<header>\r\n<title>" + this.RaceNameTextBox.Text + " 個人成績</title>\r\n<style>\r\n" + style + "</style>\r\n</header>\r\n";
+            string html = header + "<body>\r\n" + sb.ToString() + "\r\n</body>";
+
             File.WriteAllText(path, html);
         }
 
-        private void button1_Click(object sender, EventArgs e)
+
+
+        private string makeOneRecordTable(string no, int startIndex, int rowNum)
+        {
+            List<string> record = this.records[no];
+
+            if (startIndex > record.Count)
+            {
+                return "";
+            }
+
+            int endIndex = startIndex + rowNum;
+            if (endIndex > record.Count - 1)
+            {
+                endIndex = record.Count - 1;
+            }
+
+            StringBuilder sb = new StringBuilder();
+
+            for (int i = startIndex; i < endIndex; i++)
+            {
+                int lap = i + 1;
+                sb.Append(
+                    "<tr><td align=\"center\">" + lap.ToString() + "</a></td><td>" + record[i] + "</td></tr>\r\n"
+                );
+                lap++;
+
+            }
+
+            string table =
+                "<table border=\"1\" width=\"100%\">\r\n" +
+                "<tr><th>Lap数</th><th>" +
+                "最終Laptime" +
+                "</th></tr>\r\n" +
+                sb.ToString() +
+                "</table>\r\n";
+            return table;
+        }
+
+        private void clearButton_Click(object sender, EventArgs e)
         {
             this.clearCache();
+        }
+
+
+        static string myReplacer(Match m)
+        {
+            switch (m.Value)
+            {
+                case "０": return "0";
+                case "１": return "1";
+                case "２": return "2";
+                case "３": return "3";
+                case "４": return "4";
+                case "５": return "5";
+                case "６": return "6";
+                case "７": return "7";
+                case "８": return "8";
+                case "９": return "9";
+                default: return m.Value; 
+            }
         }
     }
 }
