@@ -598,7 +598,16 @@ namespace RaceRecorder
 
         private void clearButton_Click(object sender, EventArgs e)
         {
-            this.clearCache();
+            DialogResult result = MessageBox.Show(
+                "ドライバー一覧をクリアします。よろしいですか？", "確認",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Question,
+                MessageBoxDefaultButton.Button2);
+
+            if (result == DialogResult.Yes)
+            {
+                this.clearCache();
+            }
         }
 
 
